@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>MTB Steering Geometry &amp; Stability</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{background:#03030d;overflow-x:hidden}
+    input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;outline:none;cursor:pointer;display:block;width:100%}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#00d4ff;border:2px solid #03030d;box-shadow:0 0 8px #00d4ff99;cursor:pointer}
+    input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#00d4ff;border:2px solid #03030d;cursor:pointer}
+    .body{display:flex;min-height:calc(100vh - 62px)}
+    .sidebar{width:240px;min-width:210px;flex-shrink:0;border-right:1px solid #141438;background:#07071a}
+    .main{flex:1;min-width:0;padding:10px 14px}
+    .cards{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+    .card{flex:1;min-width:80px;background:#0c0c22;border-radius:8px;padding:8px 10px;border:1px solid #141438}
+    .vtabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+    @media(max-width:680px){
+      .body{flex-direction:column}
+      .sidebar{width:100%;min-width:0;border-right:none;border-bottom:1px solid #141438}
+      .main{padding:9px 11px}
+      .card{min-width:calc(50% - 7px)!important;flex:none!important}
+    }
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-thumb{background:#141438;border-radius:2px}
+  </style>
+</head>
+<body>
+  <div id="root"><div style="color:#546080;font-family:monospace;padding:40px">Loading…</div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.4/babel.min.js"></script>
+
+  <script type="text/babel">
+const {useState,useMemo}=React;
+
+// ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
+const C={
+  bg:"#03030d",surf:"#07071a",card:"#0c0c22",
+  bdr:"#141438",bdrHi:"#1e1e52",
+  txt:"#c8dcf8",mut:"#2e3455",dim:"#546080",
+  cyan:"#00d4ff",grn:"#00ff85",amb:"#ffc107",
+  red:"#ff3355",pur:"#c084fc",cap:"#ff6633",oro:"#ff9a3c",
+  mono:"'Share Tech Mono','Courier New',monospace",
+  head:"'Rajdhani','Arial Narrow',sans-serif",
+};
+
+// ─── WHEEL RADII ─────────────────────────────────────────────────────────────
+const WR={'27.5"':346.5,'29"':368.5};
+const Rf = p => p.ws==='Mullet' ? 368.5 : (WR[p.ws]||368.5); // front wheel
+const Rr = p => p.ws==='Mullet' ? 346.5 : (WR[p.ws]||368.5); // rear wheel
+
+// ─── PRESETS ─────────────────────────────────────────────────────────────────
+const GEN = {
+  cx:    {label:"CX / XC",    HTA:69.5,off:44,ws:'29"', FL:510,CS:420,reach:435,stack:597, bbD:24,rPos:.50,stem:60,barL:15,rH:178},
+  trail: {label:"Trail",      HTA:66.0,off:44,ws:'29"', FL:542,CS:432,reach:458,stack:610, bbD:26,rPos:.50,stem:50,barL:20,rH:178},
+  enduro:{label:"Enduro",     HTA:64.5,off:44,ws:'29"', FL:565,CS:436,reach:470,stack:616, bbD:22,rPos:.48,stem:45,barL:18,rH:178},
+  dh:    {label:"DH / Slack", HTA:63.0,off:38,ws:'29"', FL:585,CS:440,reach:480,stack:625, bbD:18,rPos:.48,stem:45,barL:10,rH:178},
+};
+
+// Real bike presets — geometry sourced from manufacturer / Pinkbike / Loam Wolf 2024–25
+// Ibis Ripmo V3, Size M:  reach 456 / stack 622 / HTA 64.5° / CS 435 / 160mm fork / 44mm offset
+// Devinci Troy 2025, L:   reach 480 / stack 631 / CS 442 / 160mm fork / 44mm offset
+//   Hi + 29"  → HTA 64.7°, BB height 354mm (bbD = 368.5-354 = ~14mm)
+//   Hi + MX   → HTA 64.0°, BB height 343mm (bbD from 27.5" axle = 346.5-343 = ~4mm)
+//   Note: Troy ships factory as Hi + MX. The Geo-Saver chip corrects for mullet.
+const BIKES = {
+  rip29: {label:"Ripmo M · 29\"",  HTA:64.5,off:44,ws:'29"',    FL:565,CS:435,reach:456,stack:622,bbD:28,rPos:.48,stem:50,barL:20,rH:178,
+          note:"Ibis Ripmo V3, Size M · Full 29\" · 150/160mm · DW-Link · Reach 456 / Stack 622"},
+  ripmx: {label:"Ripmo M · MX",    HTA:63.5,off:44,ws:'Mullet', FL:565,CS:435,reach:456,stack:622,bbD:28,rPos:.48,stem:50,barL:20,rH:178,
+          note:"Ibis Ripmo V3, Size M · 29F/27.5R mullet · ~1° effective HTA slackening (non-correcting chip). BB lowers ~22mm vs full 29\"."},
+  troy29:{label:"Troy L · 29\"",   HTA:64.7,off:44,ws:'29"',    FL:548,CS:442,reach:480,stack:631,bbD:15,rPos:.48,stem:50,barL:15,rH:178,
+          note:"Devinci Troy 2025, Size L · Hi chip + 29\" · 150/160mm · Split Pivot · Reach 480 / Stack 631 / BB 354mm"},
+  troymx:{label:"Troy L · MX",     HTA:64.0,off:44,ws:'Mullet', FL:548,CS:442,reach:480,stack:631,bbD:4, rPos:.48,stem:50,barL:15,rH:178,
+          note:"Devinci Troy 2025, Size L · Hi chip + 29F/27.5R · Geo-Saver corrects for mullet. BB 343mm. Factory default setup."},
+};
+
+// ─── PHYSICS ─────────────────────────────────────────────────────────────────
+function geo(p){
+  const Rf_=Rf(p), Rr_=Rr(p);
+  const ha=p.HTA*Math.PI/180, co=Math.cos(ha), si=Math.sin(ha);
+  const trail=(Rf_*co-p.off)/si;          // trail uses front wheel
+  const flop=trail*si*co;
+  const fc=p.reach+(110+p.FL)*co+p.off*si;
+  const wb=fc+p.CS;
+  const bbH=Rr_-p.bbD;                    // BB height uses rear wheel
+  const ff=Math.min(.65,Math.max(.30,(p.CS+p.reach*(.18+p.rPos*.48))/wb));
+  // Whipple stability (ref: Meijaard 2007, wb=1020, trail=76, v_w≈3.0 m/s)
+  const vw=3.0*Math.sqrt((wb/1020)/(trail/76));
+  const vc=11.5*Math.pow(trail/65,.42)*Math.pow(wb/1150,.20);
+  // RAD (Lee McCormack)
+  const radH=p.reach+(p.stem||50), radV=p.stack+(p.barL||20);
+  const RAD=Math.sqrt(radH*radH+radV*radV), tRAD=(p.rH||178)*4.47;
+  const char=trail<65?"XC Agile":trail<82?"Trail":trail<102?"Enduro":"DH / Slack";
+  return{Rf:Rf_,Rr:Rr_,trail,flop,fc,wb,bbH,ff,rf:1-ff,
+    vwk:vw*3.6,vck:vc*3.6,stb:Math.max(0,(vc-vw)*3.6),
+    RAD,tRAD,dRAD:RAD-tRAD,
+    minTR:wb/Math.tan(35*Math.PI/180),
+    maxBG:(1-ff)*wb/1050,char,p};
+}
+
+function stabSeries(g,sfx=""){
+  const vw=g.vwk/3.6,vc=g.vck/3.6;
+  return Array.from({length:145},(_,i)=>{
+    const kmh=i*.5,v=kmh/3.6,a=vw*vw,b=vc*vc,v2=v*v;
+    return{kmh,[`w${sfx}`]:+Math.max(-3,Math.min(5,3*(a-v2)/(v2+a+.1))).toFixed(3),
+               [`c${sfx}`]:+Math.max(-.7,Math.min(.7,.7*(v2-b)/(v2+b))).toFixed(3)};
+  });
+}
+
+function trailRows(){
+  const R=WR['29"'];
+  return Array.from({length:25},(_,i)=>{
+    const HTA=62+i*.5,ha=HTA*Math.PI/180,row={HTA:+HTA.toFixed(1)};
+    [38,44,51].forEach(o=>{row[`f${o}`]=Math.round((R*Math.cos(ha)-o)/Math.sin(ha))});
+    return row;
+  });
+}
+
+function cornerRows(){
+  return Array.from({length:20},(_,i)=>{
+    const kmh=5+i*3,v=kmh/3.6,row={kmh};
+    [6,12,20].forEach(r=>{row[`r${r}`]=+(Math.atan2(v*v,9.81*r)*180/Math.PI).toFixed(1)});
+    return row;
+  });
+}
+
+function radarRows(g){
+  const cl=v=>Math.max(0,Math.min(100,v));
+  return[
+    {axis:"Hi-Speed Stability",v:cl(38+(g.trail-60)*.78)},
+    {axis:"Low-Speed Agility",v:cl(97-(g.trail-55)*.90)},
+    {axis:"Self-Steering",v:cl(100-g.vwk*5)},
+    {axis:"Steer Precision",v:cl(95-g.flop*1.3)},
+    {axis:"Descent Conf.",v:cl(24+(g.trail-50)*.68)},
+    {axis:"Twitchiness",v:cl(108-g.trail*.82)},
+  ];
+}
+
+// ─── SVG LINE CHART ───────────────────────────────────────────────────────────
+function LC({data,series,xKey,h=195,xdom,ydom,xt=7,yt=5,xlabel,ylabel,rl=[],ra=[]}){
+  const VW=480,mg={t:6,r:14,b:28,l:34};
+  const iW=VW-mg.l-mg.r,iH=h-mg.t-mg.b;
+  const xs=data.map(d=>d[xKey]);
+  const xlo=xdom?xdom[0]:Math.min(...xs),xhi=xdom?xdom[1]:Math.max(...xs);
+  const ys=series.flatMap(s=>data.map(d=>d[s.k]).filter(v=>v!=null&&isFinite(v)));
+  const ylo=ydom?ydom[0]:Math.min(...ys),yhi=ydom?ydom[1]:Math.max(...ys);
+  const sx=v=>mg.l+(v-xlo)/(xhi-xlo)*iW;
+  const sy=v=>mg.t+iH-(v-ylo)/(yhi-ylo)*iH;
+  const mkp=k=>{
+    const pts=data.filter(d=>d[k]!=null&&isFinite(d[k]));
+    if(!pts.length)return"";
+    return"M"+pts.map(d=>`${sx(d[xKey]).toFixed(1)},${sy(d[k]).toFixed(1)}`).join("L");
+  };
+  const xtv=Array.from({length:xt+1},(_,i)=>xlo+i*(xhi-xlo)/xt);
+  const ytv=Array.from({length:yt+1},(_,i)=>ylo+i*(yhi-ylo)/yt);
+  const fmt=v=>Math.abs(v)<.005?"0":Number.isInteger(v)?String(v):v.toFixed(1);
+  return(
+    <svg viewBox={`0 0 ${VW} ${h}`} style={{width:"100%",height:"auto",display:"block"}}>
+      {ra.map((a,i)=>{const x1=sx(Math.max(xlo,a.x1)),x2=sx(Math.min(xhi,a.x2));
+        return x2>x1?<rect key={i} x={x1} y={mg.t} width={x2-x1} height={iH} fill={a.fill} opacity={a.op||.07}/>:null;})}
+      {ytv.map(y=>(<line key={y} x1={mg.l} y1={sy(y)} x2={mg.l+iW} y2={sy(y)} stroke={C.bdr} strokeWidth=".5"/>))}
+      {rl.filter(r=>r.y!=null).map((r,i)=>(
+        <g key={`ry${i}`}>
+          <line x1={mg.l} y1={sy(r.y)} x2={mg.l+iW} y2={sy(r.y)} stroke={r.col||"#fff"} strokeWidth={r.w||1} strokeDasharray="4,3" opacity=".7"/>
+          {r.lbl&&<text x={mg.l+iW+2} y={sy(r.y)+4} fill={r.col||"#fff"} fontSize="8" fontFamily={C.mono}>{r.lbl}</text>}
+        </g>
+      ))}
+      {rl.filter(r=>r.x!=null).map((r,i)=>(
+        <g key={`rx${i}`}>
+          <line x1={sx(r.x)} y1={mg.t} x2={sx(r.x)} y2={mg.t+iH} stroke={r.col||"#fff"} strokeWidth={r.w||1.5} strokeDasharray="5,3" opacity=".7"/>
+          {r.lbl&&<text x={sx(r.x)+3} y={mg.t+10} fill={r.col||"#fff"} fontSize="8" fontFamily={C.mono}>{r.lbl}</text>}
+        </g>
+      ))}
+      {series.map(s=>(<path key={s.k} d={mkp(s.k)} fill="none" stroke={s.col} strokeWidth={s.w||2} strokeDasharray={s.dash||"none"} strokeLinecap="round"/>))}
+      <line x1={mg.l} y1={mg.t+iH} x2={mg.l+iW} y2={mg.t+iH} stroke={C.bdrHi} strokeWidth="1"/>
+      {xtv.map(x=>(<text key={x} x={sx(x)} y={mg.t+iH+13} textAnchor="middle" fill={C.dim} fontSize="8.5" fontFamily={C.mono}>{fmt(x)}</text>))}
+      {xlabel&&<text x={mg.l+iW/2} y={h-2} textAnchor="middle" fill={C.mut} fontSize="9" fontFamily={C.head}>{xlabel}</text>}
+      <line x1={mg.l} y1={mg.t} x2={mg.l} y2={mg.t+iH} stroke={C.bdrHi} strokeWidth="1"/>
+      {ytv.map(y=>(<text key={y} x={mg.l-4} y={sy(y)+3} textAnchor="end" fill={C.dim} fontSize="8.5" fontFamily={C.mono}>{fmt(y)}</text>))}
+      {ylabel&&<text x={9} y={mg.t+iH/2} textAnchor="middle" transform={`rotate(-90 9 ${mg.t+iH/2})`} fill={C.mut} fontSize="9" fontFamily={C.head}>{ylabel}</text>}
+    </svg>
+  );
+}
+
+function ChLeg({series}){
+  return(
+    <div style={{display:"flex",gap:12,flexWrap:"wrap",paddingTop:5,fontSize:10,color:C.dim,fontFamily:C.head,fontWeight:700}}>
+      {series.map(s=>(
+        <span key={s.k} style={{display:"flex",alignItems:"center",gap:5}}>
+          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={s.col} strokeWidth={s.w||2} strokeDasharray={s.dash||"none"}/></svg>
+          {s.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─── SVG RADAR ────────────────────────────────────────────────────────────────
+function Radar({data,series}){
+  const sz=200,cx=sz/2,cy=sz/2,r=sz*.31;
+  const n=data.length,ang=i=>(i/n)*2*Math.PI-Math.PI/2;
+  const pt=(i,pct)=>[cx+r*pct*Math.cos(ang(i)),cy+r*pct*Math.sin(ang(i))];
+  const poly=k=>data.map((d,i)=>pt(i,(d[k]||0)/100).join(",")).join(" ");
+  return(
+    <svg viewBox={`0 0 ${sz} ${sz}`} style={{width:"100%",height:"auto",maxHeight:200,display:"block"}}>
+      {[.2,.4,.6,.8,1].map(p=>(<polygon key={p} points={data.map((_,i)=>pt(i,p).join(",")).join(" ")} fill="none" stroke={C.bdr} strokeWidth=".7"/>))}
+      {data.map((_,i)=>{const[x2,y2]=pt(i,1);return<line key={i} x1={cx} y1={cy} x2={x2} y2={y2} stroke={C.bdr} strokeWidth=".7"/>})}
+      {series.map(s=>(<polygon key={s.k} points={poly(s.k)} fill={s.col} fillOpacity=".15" stroke={s.col} strokeWidth={2} strokeLinejoin="round"/>))}
+      {data.map((d,i)=>{
+        const a=ang(i),px=cx+(r+22)*Math.cos(a),py=cy+(r+22)*Math.sin(a);
+        const ta=Math.cos(a)>.2?"start":Math.cos(a)<-.2?"end":"middle";
+        return<text key={i} x={px} y={py+4} textAnchor={ta} fill={C.dim} fontSize="7.5" fontFamily={C.mono}>{d.axis}</text>;
+      })}
+    </svg>
+  );
+}
+
+// ─── GEOMETRY DIAGRAM ────────────────────────────────────────────────────────
+function Diag({p,g}){
+  const VW=320,VH=270,S=.222,GY=252,WCX=132;
+  // Always draw front wheel in diagram
+  const Rpx=g.Rf*S, WCY=GY-Rpx;
+  const ha=p.HTA*Math.PI/180,co=Math.cos(ha),si=Math.sin(ha);
+  const tpx=g.trail*S,opx=p.off*S,saGX=WCX+tpx;
+  const fvpx=p.FL*.61*S;
+  const crX=WCX-fvpx*co-opx*si,crY=WCY-fvpx*si+opx*co;
+  const htpx=108*S,htX=crX-htpx*co,htY=crY-htpx*si;
+  const stX=htX-45*S*co,stY=htY-45*S*si;
+  const pfX=WCX-opx*si,pfY=WCY+opx*co;
+  const ar=32,aEX=saGX-ar*co,aEY=GY-ar*si;
+  const aLX=saGX-(ar+9)*Math.cos(ha/2),aLY=GY-(ar+8)*Math.sin(ha/2);
+  const spk=[0,30,60,90,120,150,180,210,240,270,300,330];
+  const isMullet=p.ws==='Mullet';
+  return(
+    <svg viewBox={`0 0 ${VW} ${VH}`} style={{display:"block",borderRadius:9,overflow:"hidden",width:"100%",maxWidth:VW,height:"auto"}}>
+      <defs>
+        <pattern id="pg" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20,0 L0,0 0,20" fill="none" stroke="#ffffff04" strokeWidth=".7"/></pattern>
+        <filter id="gl"><feGaussianBlur stdDeviation="1.8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <marker id="aR" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><polyline points="0,1 5,3.5 0,6" fill="none" stroke={C.grn} strokeWidth="1.3"/></marker>
+        <marker id="aL" markerWidth="7" markerHeight="7" refX="2" refY="3.5" orient="auto-start-reverse"><polyline points="0,1 5,3.5 0,6" fill="none" stroke={C.grn} strokeWidth="1.3"/></marker>
+      </defs>
+      <rect width={VW} height={VH} fill={C.surf}/><rect width={VW} height={VH} fill="url(#pg)"/>
+      {[GY-48,GY-96,GY-144].map(y=>(<line key={y} x1="8" y1={y} x2={VW-8} y2={y} stroke={C.bdr} strokeWidth=".5" opacity=".8"/>))}
+      <line x1="8" y1={GY} x2={VW-8} y2={GY} stroke={C.bdrHi} strokeWidth="1.5"/>
+      <text x={VW-10} y={GY-6} textAnchor="end" fill={C.mut} fontSize="7.5" fontFamily={C.mono}>ground</text>
+      {/* Wheel (front — always shown at full size in diagram) */}
+      <circle cx={WCX} cy={WCY} r={Rpx+10} fill="#0b0b25"/>
+      <circle cx={WCX} cy={WCY} r={Rpx+4} fill="none" stroke="#181835" strokeWidth="9"/>
+      {spk.map(d=>{const r2=d*Math.PI/180;return<line key={d} x1={WCX+4*Math.cos(r2)} y1={WCY+4*Math.sin(r2)} x2={WCX+(Rpx-3)*Math.cos(r2)} y2={WCY+(Rpx-3)*Math.sin(r2)} stroke="#1c1c45" strokeWidth=".7"/>})}
+      <circle cx={WCX} cy={WCY} r={Rpx} fill="none" stroke="#262660" strokeWidth="1.8"/>
+      <circle cx={WCX} cy={WCY} r={7} fill="#0f0f30" stroke="#26266a" strokeWidth="1.5"/>
+      <circle cx={WCX} cy={WCY} r={3} fill={C.dim}/>
+      {/* Steering axis */}
+      <line x1={stX} y1={stY} x2={saGX} y2={GY} stroke={C.cyan} strokeWidth="1.5" strokeDasharray="7,4" opacity=".9" filter="url(#gl)"/>
+      {/* Offset indicator */}
+      <line x1={pfX} y1={pfY} x2={WCX} y2={WCY} stroke={C.amb} strokeWidth="1.7" strokeDasharray="4,3" opacity=".8"/>
+      <circle cx={pfX} cy={pfY} r="3.2" fill={C.amb} opacity=".9"/>
+      {/* Fork legs */}
+      {[-4,4].map(d=>(
+        <g key={d}>
+          <line x1={crX+d*si+d*.1} y1={crY-d*co} x2={WCX+d*.4} y2={WCY} stroke="#3a4f8a" strokeWidth="5" strokeLinecap="round"/>
+          <line x1={crX+d*si+d*.1} y1={crY-d*co} x2={WCX+d*.4} y2={WCY} stroke="#5a7acc" strokeWidth="2" strokeLinecap="round" opacity=".5"/>
+        </g>
+      ))}
+      {/* Head tube */}
+      <line x1={crX} y1={crY} x2={htX} y2={htY} stroke="#2a3870" strokeWidth="10" strokeLinecap="round"/>
+      <line x1={crX} y1={crY} x2={htX} y2={htY} stroke="#4a68b8" strokeWidth="5" strokeLinecap="round"/>
+      <line x1={crX} y1={crY} x2={htX} y2={htY} stroke="#80a8e0" strokeWidth="1.8" strokeLinecap="round" opacity=".5"/>
+      <text x={htX-3} y={htY-7} textAnchor="middle" fill={C.mut} fontSize="7" fontFamily={C.mono} opacity=".6">HT</text>
+      {/* Dots */}
+      <circle cx={saGX} cy={GY} r="4.5" fill={C.cyan} stroke={C.surf} strokeWidth="1.5" filter="url(#gl)"/>
+      <circle cx={WCX} cy={GY} r="3.5" fill={C.dim} stroke={C.surf} strokeWidth="1"/>
+      {/* Trail arrow */}
+      <line x1={WCX} y1={GY+12} x2={saGX} y2={GY+12} stroke={C.grn} strokeWidth="1.7" markerStart="url(#aL)" markerEnd="url(#aR)"/>
+      <line x1={WCX} y1={GY+2} x2={WCX} y2={GY+16} stroke={C.grn} strokeWidth="1" opacity=".5"/>
+      <line x1={saGX} y1={GY+2} x2={saGX} y2={GY+16} stroke={C.grn} strokeWidth="1" opacity=".5"/>
+      <text x={(WCX+saGX)/2} y={GY+27} fill={C.grn} fontSize="10.5" fontWeight="700" textAnchor="middle" fontFamily={C.mono} filter="url(#gl)">trail = {g.trail.toFixed(0)} mm</text>
+      {/* HTA arc */}
+      <path d={`M ${saGX} ${GY} L ${saGX-ar} ${GY} A ${ar} ${ar} 0 0 0 ${aEX} ${aEY} Z`} fill={C.amb} fillOpacity=".07"/>
+      <path d={`M ${saGX-ar} ${GY} A ${ar} ${ar} 0 0 0 ${aEX} ${aEY}`} fill="none" stroke={C.amb} strokeWidth="1.5"/>
+      <line x1={saGX-ar-8} y1={GY} x2={saGX+6} y2={GY} stroke={C.bdrHi} strokeWidth="1" strokeDasharray="3,3" opacity=".5"/>
+      <text x={aLX} y={aLY} fill={C.amb} fontSize="10.5" fontWeight="700" fontFamily={C.mono}>{p.HTA.toFixed(1)}°</text>
+      <text x={(pfX+WCX)/2+7} y={(pfY+WCY)/2-4} fill={C.amb} fontSize="8" fontFamily={C.mono} opacity=".85">f={p.off}mm</text>
+      {/* Badges */}
+      <rect x="6" y="6" width={isMullet?170:138} height="26" fill={C.card} rx="4" opacity=".93"/>
+      <text x="11" y="17" fill={C.dim} fontSize="8" fontFamily={C.mono}>{isMullet?"WHEEL FLOP · MULLET":"WHEEL FLOP"}</text>
+      <text x="11" y="27" fill={isMullet?C.oro:C.amb} fontSize="10.5" fontWeight="700" fontFamily={C.mono} filter="url(#gl)">{g.flop.toFixed(1)} mm</text>
+      {isMullet&&(
+        <text x={VW-10} y={VH-8} textAnchor="end" fill={C.oro} fontSize="8.5" fontFamily={C.mono} opacity=".9">
+          29F / 27.5R · trail uses 29" wheel
+        </text>
+      )}
+    </svg>
+  );
+}
+
+// ─── SLIDER ───────────────────────────────────────────────────────────────────
+function SC({label,value,min,max,step,onChange,unit,note,acc}){
+  acc=acc||C.cyan;
+  const pct=((value-min)/(max-min))*100;
+  return(
+    <div style={{marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:3}}>
+        <span style={{fontSize:9,color:C.dim,fontFamily:C.head,letterSpacing:.4,textTransform:"uppercase"}}>{label}</span>
+        <span style={{fontSize:11,fontWeight:700,color:C.txt,fontFamily:C.mono}}>
+          {typeof value==="number"&&!Number.isInteger(value)?value.toFixed(1):value}
+          <span style={{fontSize:8,color:C.mut,marginLeft:2}}>{unit}</span>
+        </span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e=>onChange(parseFloat(e.target.value))}
+        style={{background:`linear-gradient(90deg,${acc} ${pct}%,${C.bdr} ${pct}%)`}}/>
+      {note&&<div style={{fontSize:8,color:C.mut,marginTop:2}}>{note}</div>}
+    </div>
+  );
+}
+
+// ─── METRIC CARD ─────────────────────────────────────────────────────────────
+function MC({label,value,unit,sub,col,top}){
+  col=col||C.txt;top=top||C.bdrHi;
+  return(
+    <div className="card" style={{borderTop:`2px solid ${top}`}}>
+      <div style={{fontSize:8,color:C.mut,textTransform:"uppercase",letterSpacing:.7,marginBottom:3,fontFamily:C.head}}>{label}</div>
+      <div style={{fontSize:17,fontWeight:700,color:col,lineHeight:1,fontFamily:C.mono,textShadow:`0 0 14px ${col}44`}}>
+        {value}<span style={{fontSize:9,fontWeight:400,color:C.dim,marginLeft:2}}>{unit}</span>
+      </div>
+      {sub&&<div style={{fontSize:8,color:C.mut,marginTop:2}}>{sub}</div>}
+    </div>
+  );
+}
+
+// ─── WEIGHT + RAD ─────────────────────────────────────────────────────────────
+function WeightRAD({g}){
+  const fp=(g.ff*100).toFixed(0),rp=(g.rf*100).toFixed(0);
+  const neutral=parseFloat(fp)>=40&&parseFloat(fp)<=55;
+  const radOk=Math.abs(g.dRAD)<20,radLong=g.dRAD>20;
+  const fRAD=Math.sqrt(g.p.reach**2+g.p.stack**2).toFixed(0);
+  const RAAD=(Math.atan2(g.p.stack+(g.p.barL||20),g.p.reach+(g.p.stem||50))*180/Math.PI).toFixed(1);
+  return(
+    <div>
+      <div style={{fontSize:11,color:C.dim,marginBottom:6}}>Weight distribution (static)</div>
+      <div style={{display:"flex",height:28,borderRadius:7,overflow:"hidden",border:`1px solid ${C.bdrHi}`}}>
+        <div style={{width:`${fp}%`,background:`linear-gradient(90deg,${C.cyan}33,${C.cyan}66)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.cyan,fontFamily:C.mono,transition:"width .3s"}}>{fp}%</div>
+        <div style={{width:`${rp}%`,background:`linear-gradient(90deg,${C.amb}55,${C.amb}33)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.amb,fontFamily:C.mono,transition:"width .3s"}}>{rp}%</div>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:9,color:C.mut}}>
+        <span>◀ FRONT</span><span>REAR ▶</span>
+      </div>
+      <div style={{marginTop:12,fontSize:11,color:C.dim,marginBottom:6}}>RAD — Rider Area Distance (Lee McCormack)</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+        {[
+          ["Frame RAD",fRAD+" mm",C.dim],
+          ["Cockpit RAD",g.RAD.toFixed(0)+" mm",radOk?C.grn:radLong?C.red:C.amb],
+          ["Target RAD",g.tRAD.toFixed(0)+" mm",C.cyan],
+          ["Δ from tgt",(g.dRAD>=0?"+":"")+g.dRAD.toFixed(0)+" mm",radOk?C.grn:radLong?C.red:C.amb],
+          ["RAAD",RAAD+"°",C.dim],
+          ["Balance",neutral?"Neutral ✓":parseFloat(fp)<40?"Rear-heavy":"Front-heavy",neutral?C.grn:C.amb],
+        ].map(([l,v,c])=>(
+          <div key={l} style={{padding:"6px 8px",background:C.card,borderRadius:5,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontSize:7.5,color:C.mut,marginBottom:1,textTransform:"uppercase",letterSpacing:.3}}>{l}</div>
+            <div style={{fontSize:10.5,color:c,fontWeight:600,fontFamily:C.mono}}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{marginTop:8,fontSize:10,color:C.mut,lineHeight:1.55}}>
+        RAD = BB-center to grip-center hypotenuse. Target = height × 4.47 mm.
+        {radLong?" ⚠ Too long — shorter stem / less bar rise.":radOk?" ✓ Within 20 mm of target.":" ↑ Slightly short."}
+      </div>
+    </div>
+  );
+}
+
+// ─── COMPARE PANEL ────────────────────────────────────────────────────────────
+function CmpPanel({gA,gB,pB,set}){
+  const rows=[
+    {k:"trail",l:"Trail",u:"mm",d:0},{k:"flop",l:"Wheel Flop",u:"mm",d:1},
+    {k:"wb",l:"Wheelbase",u:"mm",d:0},{k:"bbH",l:"BB Height",u:"mm",d:0},
+    {k:"RAD",l:"Cockpit RAD",u:"mm",d:0},{k:"vwk",l:"Self-stable from",u:"km/h",d:1},
+    {k:"stb",l:"Stable range",u:"km/h",d:0},{k:"minTR",l:"Min turn radius",u:"mm",d:0},
+    {k:"maxBG",l:"Rear-lift brake",u:"g",d:2},
+  ];
+  return(
+    <div>
+      <div style={{padding:"9px 11px",background:C.card,borderRadius:8,border:`1px solid ${C.bdr}`,marginBottom:12}}>
+        <div style={{fontSize:11,color:C.pur,fontWeight:700,marginBottom:8,fontFamily:C.head,letterSpacing:1,textTransform:"uppercase"}}>Config B</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+          {[["HTA","HTA","°",62,72,.25,v=>set(p=>({...p,HTA:v}))],
+            ["Offset","off","mm",38,55,1,v=>set(p=>({...p,off:v}))],
+            ["BB Drop","bbD","mm",2,40,1,v=>set(p=>({...p,bbD:v}))],
+            ["Chainstay","CS","mm",415,450,1,v=>set(p=>({...p,CS:v}))],
+          ].map(([l,k,u,mn,mx,st,fn])=>(
+            <SC key={k} label={l} value={pB[k]} min={mn} max={mx} step={st} unit={u} onChange={fn} acc={C.pur}/>
+          ))}
+        </div>
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr style={{borderBottom:`1px solid ${C.bdrHi}`}}>
+          {[["Metric","left",C.mut],["A","right",C.cyan],["B","right",C.pur],["Δ","right",C.amb]].map(([h,ta,c])=>(
+            <th key={h} style={{padding:"5px 8px",color:c,textAlign:ta,fontWeight:700,fontFamily:C.mono,fontSize:10}}>{h}</th>
+          ))}
+        </tr></thead>
+        <tbody>
+          {rows.map(({k,l,u,d})=>{
+            const vA=gA[k],vB=gB[k],delta=vB-vA;
+            const dc=Math.abs(delta)<.5?C.mut:delta>0?C.grn:C.red;
+            return(
+              <tr key={k} style={{borderBottom:`1px solid ${C.bdr}`}}>
+                <td style={{padding:"5px 8px",color:C.dim}}>{l}</td>
+                <td style={{padding:"5px 8px",color:C.cyan,textAlign:"right",fontFamily:C.mono,fontWeight:600}}>{vA.toFixed(d)}<span style={{color:C.mut,marginLeft:2}}>{u}</span></td>
+                <td style={{padding:"5px 8px",color:C.pur,textAlign:"right",fontFamily:C.mono,fontWeight:600}}>{vB.toFixed(d)}<span style={{color:C.mut,marginLeft:2}}>{u}</span></td>
+                <td style={{padding:"5px 8px",textAlign:"right",fontFamily:C.mono,fontWeight:700,color:dc}}>{delta>=0?"+":""}{delta.toFixed(d)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div style={{marginTop:9,display:"flex",gap:8}}>
+        {[["A",gA,C.cyan],["B",gB,C.pur]].map(([l,g,c])=>(
+          <div key={l} style={{flex:1,padding:"8px 9px",background:C.card,borderRadius:7,border:`1px solid ${c}44`,textAlign:"center"}}>
+            <div style={{fontSize:9,color:C.dim,marginBottom:2}}>CONFIG {l}</div>
+            <div style={{fontSize:13,fontWeight:700,color:c,fontFamily:C.head}}>{g.char}</div>
+            <div style={{fontSize:8,color:C.mut,marginTop:2,fontFamily:C.mono}}>{g.p.ws==='Mullet'?'29F/27.5R':'Full '+g.p.ws} · trail {g.trail.toFixed(0)}mm</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ─────────────────────────────────────────────────────────────────────
+function App(){
+  const[pA,setA]=useState({...GEN.trail});
+  const[pB,setB]=useState({...BIKES.troy29});
+  const[ctab,setCt]=useState("geo");
+  const[vtab,setVt]=useState("diagram");
+  const[open,setOpen]=useState(true);
+  const[activeNote,setNote]=useState(null);
+
+  const gA=useMemo(()=>geo(pA),[pA]);
+  const gB=useMemo(()=>geo(pB),[pB]);
+  const dA=useMemo(()=>stabSeries(gA),[gA]);
+  const dB=useMemo(()=>stabSeries(gB,"B"),[gB]);
+  const tmap=useMemo(trailRows,[]);
+  const cmap=useMemo(cornerRows,[]);
+  const rdA=useMemo(()=>radarRows(gA),[gA]);
+  const rdB=useMemo(()=>radarRows(gB),[gB]);
+  const rdComb=useMemo(()=>rdA.map((r,i)=>({...r,vB:rdB[i].v})),[rdA,rdB]);
+  const stabMerged=useMemo(()=>dA.map((r,i)=>({...r,...dB[i]})),[dA,dB]);
+
+  const ua=(k,v)=>setA(p=>({...p,[k]:v}));
+  const apG=k=>{setA({...GEN[k]});setNote(null);};
+  const apB=k=>{const pr=BIKES[k];setA({...pr});setNote(pr.note);};
+
+  const cc=gA.char.startsWith("XC")?"#00ff85":gA.char.startsWith("Trail")?"#00d4ff":gA.char.startsWith("Enduro")?"#ffc107":"#ff6633";
+  const isMullet=pA.ws==='Mullet';
+
+  const vwA=gA.vwk,vcA=Math.min(gA.vck,72);
+  const vwB=gB.vwk,vcB=Math.min(gB.vck,72);
+
+  const stabSer=[
+    {k:"w",  name:"Weave A",   col:C.cyan,w:2.5},
+    {k:"c",  name:"Capsize A", col:C.cap, w:2,dash:"7,3"},
+    ...(vtab==="compare"?[
+      {k:"wB",name:"Weave B",  col:C.pur, w:2},
+      {k:"cB",name:"Capsize B",col:"#ff9955",w:1.8,dash:"7,3"},
+    ]:[]),
+  ];
+  const trailSer=[{k:"f38",name:"38mm",col:C.pur,w:2},{k:"f44",name:"44mm",col:C.cyan,w:2.5},{k:"f51",name:"51mm",col:C.amb,w:2}];
+  const cornerSer=[{k:"r6",name:"R=6m",col:C.red,w:2},{k:"r12",name:"R=12m",col:C.cyan,w:2},{k:"r20",name:"R=20m",col:C.grn,w:2}];
+
+  const PBtn=({label,active,onClick,col})=>(
+    <button onClick={onClick} style={{
+      padding:"4px 9px",border:`1px solid ${active?(col||C.cyan):C.bdrHi}`,borderRadius:5,
+      background:active?`${col||C.cyan}18`:"transparent",cursor:"pointer",fontSize:10,
+      color:active?(col||C.cyan):C.dim,fontFamily:C.head,fontWeight:700,transition:"all .15s",
+      letterSpacing:.4,
+    }}>{label}</button>
+  );
+
+  return(
+    <div style={{background:C.bg,minHeight:"100vh",color:C.txt,fontFamily:C.head}}>
+
+      {/* HEADER */}
+      <div style={{borderBottom:`1px solid ${C.bdr}`,padding:"8px 13px",background:`linear-gradient(180deg,${C.surf},${C.bg})`,display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
+        <div>
+          <div style={{fontSize:14,fontWeight:700,letterSpacing:-.2}}>⚙ MTB STEERING GEOMETRY &amp; STABILITY</div>
+          <div style={{fontSize:9,color:C.dim,marginTop:1,fontFamily:C.mono}}>Trail · Wheel Flop · Whipple Stability · Cornering · RAD</div>
+        </div>
+
+        {/* Preset rows */}
+        <div style={{display:"flex",flexDirection:"column",gap:5,marginLeft:"auto"}}>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+            <span style={{fontSize:8,color:C.mut,fontFamily:C.head,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",minWidth:56}}>Generic</span>
+            {Object.entries(GEN).map(([k,pr])=>(
+              <PBtn key={k} label={pr.label} onClick={()=>apG(k)}/>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+            <span style={{fontSize:8,color:C.mut,fontFamily:C.head,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",minWidth:56}}>Real</span>
+            {Object.entries(BIKES).map(([k,pr])=>{
+              const isRipmo=k.startsWith("rip");
+              const isMx=k.endsWith("mx");
+              const col=isRipmo?(isMx?C.oro:C.cyan):(isMx?C.oro:C.pur);
+              return<PBtn key={k} label={pr.label} onClick={()=>apB(k)} col={col}/>;
+            })}
+          </div>
+        </div>
+
+        {/* Character badge */}
+        <div style={{padding:"3px 11px",borderRadius:14,background:`${cc}18`,border:`1px solid ${cc}55`,fontSize:11,fontWeight:700,color:cc,letterSpacing:1,fontFamily:C.head}}>{gA.char.toUpperCase()}</div>
+
+        {/* Wheel setup */}
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {['27.5"','29"','Mullet'].map(s=>{
+            const isSel=pA.ws===s;
+            const c=s==='Mullet'?C.oro:C.cyan;
+            return(
+              <button key={s} onClick={()=>ua("ws",s)} style={{
+                padding:"3px 8px",border:`1px solid ${isSel?c:C.bdr}`,borderRadius:5,
+                background:isSel?`${c}20`:"transparent",cursor:"pointer",
+                fontSize:10,color:isSel?c:C.dim,fontFamily:C.head,fontWeight:700,
+              }}>{s==='Mullet'?'29F/27.5R':s}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bike note banner */}
+      {activeNote&&(
+        <div style={{background:`${C.cyan}10`,borderBottom:`1px solid ${C.cyan}33`,padding:"6px 14px",fontSize:10,color:C.cyan,fontFamily:C.mono}}>
+          📍 {activeNote}
+        </div>
+      )}
+
+      {/* Mullet banner */}
+      {isMullet&&(
+        <div style={{background:`${C.oro}0d`,borderBottom:`1px solid ${C.oro}33`,padding:"5px 14px",fontSize:10,color:C.oro,fontFamily:C.mono}}>
+          🔀 Mullet mode · Front: 29" (R=368.5mm) for trail calc · Rear: 27.5" (R=346.5mm) for BB height · BB height = {gA.bbH.toFixed(0)}mm
+        </div>
+      )}
+
+      <div className="body">
+        {/* SIDEBAR */}
+        <div className="sidebar">
+          <button onClick={()=>setOpen(o=>!o)} style={{
+            width:"100%",padding:"7px 12px",background:"transparent",border:"none",
+            borderBottom:`1px solid ${C.bdr}`,cursor:"pointer",display:"flex",
+            justifyContent:"space-between",color:C.dim,fontSize:11,fontFamily:C.head,fontWeight:700,letterSpacing:.5,
+          }}>
+            <span>⚙ CONTROLS</span><span>{open?"▲":"▼"}</span>
+          </button>
+          {open&&(
+            <div style={{padding:"11px 12px"}}>
+              <div style={{display:"flex",gap:4,marginBottom:11}}>
+                {[["geo","Geometry"],["frame","Frame"],["rider","Rider/RAD"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setCt(k)} style={{
+                    flex:1,padding:"4px 0",border:`1px solid ${ctab===k?C.cyan:C.bdr}`,borderRadius:4,
+                    background:ctab===k?`${C.cyan}15`:"transparent",cursor:"pointer",
+                    fontSize:9,color:ctab===k?C.cyan:C.dim,fontFamily:C.head,fontWeight:700,
+                  }}>{l}</button>
+                ))}
+              </div>
+              {ctab==="geo"&&<>
+                <SC label="Head Angle (eff.)" value={pA.HTA} min={62} max={73} step={.25} unit="°" onChange={v=>ua("HTA",v)} note="Effective/corrected HTA (62° slack ↔ 73° steep)"/>
+                <SC label="Fork Offset" value={pA.off} min={38} max={55} step={1} unit="mm" onChange={v=>ua("off",v)} note="More offset = less trail"/>
+                <SC label="Fork Length" value={pA.FL} min={490} max={590} step={5} unit="mm" onChange={v=>ua("FL",v)} note="Axle-to-crown (A2C)"/>
+                <div style={{marginTop:10,padding:"8px 9px",background:C.card,borderRadius:6,border:`1px solid ${C.bdr}`,fontSize:9}}>
+                  <div style={{color:C.dim,marginBottom:3,textTransform:"uppercase",letterSpacing:.4}}>Formulae</div>
+                  <code style={{fontFamily:C.mono,fontSize:8.5,color:C.amb,lineHeight:1.9,display:"block"}}>
+                    T = (R_front·cosθ − f) / sinθ<br/>
+                    WF = T·sinθ·cosθ<br/>
+                    BB = R_rear − bb_drop<br/>
+                    v_w ∝ √(wb / trail)
+                  </code>
+                </div>
+              </>}
+              {ctab==="frame"&&<>
+                <SC label="Reach" value={pA.reach} min={400} max={510} step={5} unit="mm" onChange={v=>ua("reach",v)}/>
+                <SC label="Stack" value={pA.stack} min={570} max={660} step={5} unit="mm" onChange={v=>ua("stack",v)}/>
+                <SC label="Chainstay" value={pA.CS} min={415} max={450} step={1} unit="mm" onChange={v=>ua("CS",v)}/>
+                <SC label={isMullet?"BB Drop (from 27.5\" axle)":"BB Drop"} value={pA.bbD} min={2} max={40} step={1} unit="mm" onChange={v=>ua("bbD",v)} note="From rear axle centreline to BB"/>
+              </>}
+              {ctab==="rider"&&<>
+                <SC label="Rider Height" value={pA.rH} min={155} max={200} step={1} unit="cm" onChange={v=>ua("rH",v)} note="Sets target RAD (×4.47)"/>
+                <SC label="Stem Length" value={pA.stem} min={30} max={90} step={5} unit="mm" onChange={v=>ua("stem",v)}/>
+                <SC label="Bar Lift" value={pA.barL} min={0} max={80} step={5} unit="mm" onChange={v=>ua("barL",v)} note="Spacers + stem rise + bar rise"/>
+                <SC label="Rider Position" value={pA.rPos} min={0} max={1} step={.05} unit="" onChange={v=>ua("rPos",v)} note="0=all rear, 1=all forward"/>
+              </>}
+            </div>
+          )}
+        </div>
+
+        {/* MAIN */}
+        <div className="main">
+          {/* Metric cards */}
+          <div className="cards">
+            <MC label="Trail" value={gA.trail.toFixed(0)} unit="mm" col={C.grn} top={C.grn} sub={gA.char}/>
+            <MC label="Wheel Flop" value={gA.flop.toFixed(1)} unit="mm" col={isMullet?C.oro:C.amb} top={isMullet?C.oro:C.amb}/>
+            <MC label="BB Height" value={gA.bbH.toFixed(0)} unit="mm" col={C.cyan} top={C.cyan} sub={isMullet?"rear axle ref":"axle ref"}/>
+            <MC label="Stable Speed" value={`${gA.vwk.toFixed(0)}–${Math.round(Math.min(gA.vck,99))}`} unit="km/h" col={C.grn} top={C.grn} sub={`${gA.stb.toFixed(0)} km/h range`}/>
+            <MC label="RAD" value={gA.RAD.toFixed(0)} unit="mm" col={Math.abs(gA.dRAD)<20?C.grn:C.amb} top={Math.abs(gA.dRAD)<20?C.grn:C.amb} sub={`tgt ${gA.tRAD.toFixed(0)} (Δ${gA.dRAD>=0?"+":""}${gA.dRAD.toFixed(0)})`}/>
+            <MC label="Weight F/R" value={`${(gA.ff*100).toFixed(0)}/${(gA.rf*100).toFixed(0)}`} unit="%" col={C.cyan} top={C.cyan}/>
+          </div>
+
+          {/* View tabs */}
+          <div className="vtabs">
+            {[["diagram","Geometry"],["stability","Stability"],["cornering","Cornering & RAD"],["compare","Compare"]].map(([k,l])=>(
+              <button key={k} onClick={()=>setVt(k)} style={{
+                padding:"5px 11px",border:`1px solid ${vtab===k?C.cyan:C.bdr}`,borderRadius:5,
+                background:vtab===k?`${C.cyan}18`:"transparent",cursor:"pointer",
+                fontSize:10,fontFamily:C.head,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",
+                color:vtab===k?C.cyan:C.dim,boxShadow:vtab===k?`0 0 8px ${C.cyan}28`:"none",
+              }}>{l}</button>
+            ))}
+          </div>
+
+          {/* DIAGRAM */}
+          {vtab==="diagram"&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-start"}}>
+              <div style={{flexShrink:0,width:"100%",maxWidth:320}}><Diag p={pA} g={gA}/></div>
+              <div style={{flex:1,minWidth:220}}>
+                <div style={{fontSize:11,color:C.dim,marginBottom:6}}>Trail (mm) vs HTA — 29" wheel, 3 fork offsets</div>
+                <LC data={tmap} series={trailSer} xKey="HTA" h={178} xlabel="HTA (°)" ylabel="Trail (mm)"
+                  rl={[{x:pA.HTA,col:C.grn,lbl:"now"},{y:gA.trail,col:C.grn,w:.8}]}
+                  ra={[{x1:62,x2:65,fill:"#fff",op:.015},{x1:65,x2:82,fill:"#fff",op:.022},{x1:82,x2:102,fill:"#fff",op:.028}]}
+                  xt={5} yt={4}/>
+                <ChLeg series={trailSer}/>
+                <div style={{marginTop:10,padding:"8px 10px",background:C.card,border:`1px solid ${C.bdr}`,borderRadius:7,fontSize:11,color:C.dim,lineHeight:1.6}}>
+                  <strong style={{color:C.txt}}>Trail</strong> ({gA.trail.toFixed(0)}mm) = self-centering force.{" "}
+                  <strong style={{color:C.txt}}>Wheel flop</strong> ({gA.flop.toFixed(1)}mm) = front-end drop at 90° turn.{" "}
+                  {isMullet&&<span style={{color:C.oro}}>Mullet: trail uses 29" front wheel. BB height ({gA.bbH.toFixed(0)}mm) uses 27.5" rear. </span>}
+                  Min turn radius <span style={{color:C.cyan,fontFamily:C.mono}}>{(gA.minTR/1000).toFixed(1)}m</span> · rear lift &gt;<span style={{color:C.amb,fontFamily:C.mono}}> {gA.maxBG.toFixed(2)}g</span>.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STABILITY */}
+          {vtab==="stability"&&(
+            <div>
+              <div style={{display:"flex",gap:12,marginBottom:7,flexWrap:"wrap",fontSize:11,color:C.dim,lineHeight:1.5}}>
+                <span><span style={{color:C.grn}}>▮</span> A: self-stable&nbsp;
+                  <span style={{color:C.txt,fontFamily:C.mono}}>{vwA.toFixed(1)}–{vcA.toFixed(0)} km/h ({gA.stb.toFixed(0)} km/h range)</span>
+                </span>
+              </div>
+              <LC data={stabMerged} series={stabSer} xKey="kmh" h={205}
+                ydom={[-3,3.5]} xlabel="Speed (km/h)" ylabel="σ (s⁻¹)"
+                rl={[{y:0,col:C.bdrHi,w:.8},{x:vwA,col:C.grn,lbl:"v_w"}]}
+                ra={[{x1:vwA,x2:Math.min(72,vcA),fill:C.grn}]} xt={7} yt={5}/>
+              <ChLeg series={stabSer}/>
+              <div style={{marginTop:9,padding:"9px 11px",background:C.card,border:`1px solid ${C.bdr}`,borderRadius:7,fontSize:11,color:C.dim,lineHeight:1.65}}>
+                <strong style={{color:C.txt}}>Whipple eigenvalues — </strong>
+                Negative σ = stable. <span style={{color:C.cyan}}>Weave</span> (yaw–lean) stabilizes above
+                <span style={{color:C.cyan,fontFamily:C.mono}}> {vwA.toFixed(1)} km/h</span>.
+                <span style={{color:C.cap}}> Capsize</span> stable past
+                <span style={{color:C.cap,fontFamily:C.mono}}> {vcA.toFixed(0)} km/h</span>.
+                <span style={{fontFamily:C.mono,color:C.amb}}> v_w ∝ √(wb/trail)</span> — wheelbase and trail both set the stable window.
+              </div>
+            </div>
+          )}
+
+          {/* CORNERING */}
+          {vtab==="cornering"&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:12}}>
+              <div style={{flex:1,minWidth:230}}>
+                <div style={{fontSize:11,color:C.dim,marginBottom:6}}>Lean angle vs speed — θ = atan(v²/gR)</div>
+                <LC data={cmap} series={cornerSer} xKey="kmh" h={182}
+                  xlabel="Speed (km/h)" ylabel="Lean (°)"
+                  rl={[{y:45,col:C.amb,lbl:"45°"}]} xt={5} yt={5}/>
+                <ChLeg series={cornerSer}/>
+                <div style={{marginTop:12}}><WeightRAD g={gA}/></div>
+              </div>
+              <div style={{flex:1,minWidth:230}}>
+                <div style={{fontSize:11,color:C.dim,marginBottom:4}}>Handling profile (0–100)</div>
+                <Radar data={rdA} series={[{k:"v",col:C.cyan}]}/>
+              </div>
+            </div>
+          )}
+
+          {/* COMPARE */}
+          {vtab==="compare"&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:12}}>
+              <div style={{flex:1,minWidth:250}}><CmpPanel gA={gA} gB={gB} pB={pB} set={setB}/></div>
+              <div style={{flex:1,minWidth:250}}>
+                <div style={{display:"flex",gap:10,marginBottom:7,flexWrap:"wrap",fontSize:11,color:C.dim,lineHeight:1.5}}>
+                  <span><span style={{color:C.grn}}>▮</span> A: <span style={{color:C.txt,fontFamily:C.mono}}>{vwA.toFixed(1)}–{vcA.toFixed(0)} km/h</span></span>
+                  <span><span style={{color:C.pur}}>▮</span> B: <span style={{color:C.txt,fontFamily:C.mono}}>{vwB.toFixed(1)}–{vcB.toFixed(0)} km/h</span></span>
+                </div>
+                <LC data={stabMerged} series={stabSer} xKey="kmh" h={190}
+                  ydom={[-3,3.5]} xlabel="Speed (km/h)" ylabel="σ (s⁻¹)"
+                  rl={[{y:0,col:C.bdrHi,w:.8},{x:vwA,col:C.grn},{x:vwB,col:C.pur}]}
+                  ra={[{x1:vwA,x2:Math.min(72,vcA),fill:C.grn},{x1:vwB,x2:Math.min(72,vcB),fill:C.pur,op:.04}]}
+                  xt={7} yt={5}/>
+                <ChLeg series={stabSer}/>
+                <div style={{marginTop:12}}>
+                  <div style={{fontSize:11,color:C.dim,marginBottom:4}}>Handling profiles A vs B</div>
+                  <Radar data={rdComb} series={[{k:"v",col:C.cyan},{k:"vB",col:C.pur}]}/>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
