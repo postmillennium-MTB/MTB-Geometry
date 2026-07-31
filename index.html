@@ -349,16 +349,16 @@ const {
   useEffect
 } = React;
 const C = {
-  bg: "#1a1a24",
-  surf: "#21212e",
-  card: "#2c2c3e",
-  cardHi: "#343450",
-  bdr: "#3c3c58",
-  bdrHi: "#525274",
-  txt: "#f0f0fc",
-  sub: "#a8a8c8",
-  dim: "#7878a8",
-  mut: "#50507a",
+  bg: "#32323a",
+  surf: "#3c3c44",
+  card: "#46464f",
+  cardHi: "#52525c",
+  bdr: "#5c5c67",
+  bdrHi: "#757580",
+  txt: "#f6f6f9",
+  sub: "#bcbcc7",
+  dim: "#8f8f9c",
+  mut: "#62626d",
   blue: "#7aabff",
   grn: "#5dd992",
   amb: "#f0b030",
@@ -372,48 +372,66 @@ const C = {
 const THEMES = {
   midnight: {
     name: "Midnight",
-    bg: "#1a1a24",
-    surf: "#21212e",
-    card: "#2c2c3e",
-    cardHi: "#343450",
-    bdr: "#3c3c58",
-    bdrHi: "#525274",
-    txt: "#f0f0fc",
-    sub: "#a8a8c8",
-    dim: "#7878a8",
-    mut: "#50507a",
+    bg: "#32323a",
+    surf: "#3c3c44",
+    card: "#46464f",
+    cardHi: "#52525c",
+    bdr: "#5c5c67",
+    bdrHi: "#757580",
+    txt: "#f6f6f9",
+    sub: "#bcbcc7",
+    dim: "#8f8f9c",
+    mut: "#62626d",
     blue: "#7aabff",
+    grn: "#5dd992",
+    amb: "#f0b030",
+    red: "#ee6464",
+    pur: "#c080ff",
+    teal: "#3dd4b8",
+    cap: "#f09050",
     swatch: "#7aabff"
   },
   alpine: {
     name: "Alpine",
-    bg: "#12161a",
-    surf: "#181e23",
-    card: "#20272d",
-    cardHi: "#283037",
-    bdr: "#333d44",
-    bdrHi: "#46525a",
-    txt: "#eef2f4",
-    sub: "#9fb0b8",
-    dim: "#71838c",
-    mut: "#48555c",
-    blue: "#5fc3e8",
-    swatch: "#5fc3e8"
+    bg: "#303434",
+    surf: "#3a3f3f",
+    card: "#454b4b",
+    cardHi: "#515858",
+    bdr: "#5c6363",
+    bdrHi: "#767f7f",
+    txt: "#f1f5f5",
+    sub: "#b7c3c3",
+    dim: "#8b9797",
+    mut: "#5f6969",
+    blue: "#57cbee",
+    grn: "#5dd992",
+    amb: "#f0b030",
+    red: "#ee6464",
+    pur: "#c080ff",
+    teal: "#3dd4b8",
+    cap: "#f09050",
+    swatch: "#57cbee"
   },
   rose: {
     name: "Rose",
-    bg: "#1c1418",
-    surf: "#241a20",
-    card: "#2e2128",
-    cardHi: "#392833",
-    bdr: "#4a3540",
-    bdrHi: "#634657",
-    txt: "#faf0f4",
-    sub: "#c9a8ba",
-    dim: "#96768a",
-    mut: "#5c4552",
-    blue: "#ec6fb0",
-    swatch: "#ec6fb0"
+    bg: "#332c31",
+    surf: "#3d353b",
+    card: "#494048",
+    cardHi: "#564b55",
+    bdr: "#645763",
+    bdrHi: "#80707e",
+    txt: "#fdeefc",
+    sub: "#e2acdb",
+    dim: "#b686ad",
+    mut: "#7a5c74",
+    blue: "#ff2fd6",
+    grn: "#39f5b0",
+    amb: "#fbe74d",
+    red: "#ff5277",
+    pur: "#b98bff",
+    teal: "#43e6ff",
+    cap: "#ff9d3d",
+    swatch: "#ff2fd6"
   }
 };
 const WR = {
@@ -2358,9 +2376,14 @@ function App() {
       textTransform: "uppercase"
     }
   }, "Quick preview"), ...[
-    ["diagram", "Geometry", D(Diag, {
-      p: pA,
-      g: gA
+    ["diagram", "Geometry", LC({
+      data: tmap,
+      series: trailSer,
+      xKey: "HTA",
+      h: 64,
+      ydom: [40, 160],
+      xt: 1,
+      yt: 1
     })],
     ["stability", "Stability", LC({
       data: stabMerged,
@@ -2379,11 +2402,14 @@ function App() {
       xt: 1,
       yt: 1
     })],
-    ["compare", "Handling / RAD", D(Radar, {
-      data: rdA,
+    ["compare", "Handling A/B", D(Radar, {
+      data: rdComb,
       series: [{
         k: "v",
         col: C.blue
+      }, {
+        k: "vB",
+        col: C.pur
       }]
     })]
   ].map(([k, label, chart]) => D("button", {
