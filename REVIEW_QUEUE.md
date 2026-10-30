@@ -4,6 +4,28 @@ Items parked for a later look. Newest first. Nothing here is committed to as wor
 
 ---
 
+## 2026-10-30 — Mad Scientist MTB: RAD calculator and geometry compare
+
+**Links**
+- https://madscientistmtb.com/rad-calc/
+- https://madscientistmtb.com/bike-geometry-compare/
+
+**Why queued**
+Saved as reference, no stated reason beyond the topic. Not yet opened. Going by the URLs only, they appear to overlap our "Cornering & RAD" and "Compare" tabs.
+
+**To evaluate**
+1. RAD: how they define and calculate it, and whether the formula, inputs and target values match ours. Any disagreement is worth resolving before we publish numbers.
+2. Compare: how many bikes it handles at once, how it presents the differences (table, overlay, deltas), and where it beats our Compare tab.
+3. Data: where the geometry numbers come from, and whether there is a bike database we lack.
+4. Gaps: what each tool shows that ours doesn't, and the reverse.
+
+**Guardrail**
+Same as the BikeYoke item. Review for ideas and feature gaps, build independently, and don't reuse their code, data or assets.
+
+**Status:** not started
+
+---
+
 ## 2026-10-30 — Add a summary landing tab
 
 **Idea**
