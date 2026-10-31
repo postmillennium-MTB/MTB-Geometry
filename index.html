@@ -1957,7 +1957,7 @@ function App() {
   const [troyBSize, setTroyBSize] = useState("M");
   const [activeTroyCfg, setActiveTroyCfg] = useState(null);
   const [ctab, setCt] = useState("geo");
-  const [vtab, setVt] = useState("diagram");
+  const [vtab, setVt] = useState("summary");
   const [open, setOpen] = useState(true);
   const [note, setNote] = useState(null);
   const [stabShowBoth, setStabShowBoth] = useState(false);
@@ -2382,90 +2382,6 @@ function App() {
       gap: 7
     }
   }, topRow, showPre && presetRow, showPre && troyRow, wheelRow);
-  const miniGallery = D("div", {
-    style: {
-      marginTop: 10,
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, D("div", {
-    style: {
-      fontSize: 9,
-      color: C.dim,
-      fontWeight: 600,
-      letterSpacing: .4,
-      textTransform: "uppercase"
-    }
-  }, "Quick preview"), ...[
-    ["diagram", "Geometry", LC({
-      data: tmap,
-      series: trailSer,
-      xKey: "HTA",
-      h: 64,
-      ydom: [40, 160],
-      xt: 1,
-      yt: 1
-    })],
-    ["stability", "Stability", LC({
-      data: stabMerged,
-      series: stabSer,
-      xKey: "kmh",
-      h: 64,
-      ydom: [-3, 3.5],
-      xt: 1,
-      yt: 1
-    })],
-    ["cornering", "Cornering", LC({
-      data: cmap,
-      series: cornerSer,
-      xKey: "kmh",
-      h: 64,
-      xt: 1,
-      yt: 1
-    })],
-    ["compare", "Handling A/B", D(Radar, {
-      data: rdComb,
-      series: [{
-        k: "v",
-        col: C.blue
-      }, {
-        k: "vB",
-        col: C.pur
-      }]
-    })]
-  ].map(([k, label, chart]) => D("button", {
-    key: k,
-    onClick: () => setVt(k),
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "6px 8px",
-      border: "1px solid " + (vtab === k ? C.blue : C.bdr),
-      borderRadius: 7,
-      background: vtab === k ? C.blue + "14" : C.card,
-      cursor: "pointer",
-      textAlign: "left"
-    }
-  }, D("div", {
-    style: {
-      width: 54,
-      height: 42,
-      flexShrink: 0,
-      overflow: "hidden",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, chart), D("span", {
-    style: {
-      fontSize: 10,
-      color: vtab === k ? C.blue : C.sub,
-      fontFamily: C.head,
-      fontWeight: 600
-    }
-  }, label))));
   return D("div", {
     style: {
       background: C.bg,
@@ -2609,7 +2525,7 @@ function App() {
       lineHeight: 1.9,
       display: "block"
     }
-  }, "T = (R\u2099 \xB7 cos\u03B8 \u2212 f) / sin\u03B8", D("br", null), "WF = T \xB7 sin\u03B8 \xB7 cos\u03B8", D("br", null), "BB = R_rear \u2212 bb_drop", D("br", null), "v_w \u221D \u221A(wb / trail)", D("br", null), "RAD = |BB \u2192 grip|, stem + lift along steerer axis")), miniGallery), ctab === "frame" && D("div", {}, D(SC, {
+  }, "T = (R\u2099 \xB7 cos\u03B8 \u2212 f) / sin\u03B8", D("br", null), "WF = T \xB7 sin\u03B8 \xB7 cos\u03B8", D("br", null), "BB = R_rear \u2212 bb_drop", D("br", null), "v_w \u221D \u221A(wb / trail)", D("br", null), "RAD = |BB \u2192 grip|, stem + lift along steerer axis"))), ctab === "frame" && D("div", {}, D(SC, {
     label: "Reach",
     value: pA.reach,
     min: 400,
@@ -2795,6 +2711,7 @@ function App() {
   })), D("div", {
     className: "vtabs"
   }, [
+    ["summary", "Summary"],
     ["diagram", "Geometry"],
     ["stability", "Stability"],
     ["cornering", "Cornering & RAD"],
@@ -2804,7 +2721,142 @@ function App() {
     label: l,
     active: vtab === k,
     onClick: () => setVt(k)
-  }))), vtab === "diagram" && D("div", {
+  }))), vtab === "summary" && D("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))",
+      gap: 12
+    }
+  }, ...[
+    ["diagram", "Geometry", "Trail " + gA.trail.toFixed(0) + " mm \u00B7 flop " + gA.flop.toFixed(1) + " mm", D("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        alignItems: "center"
+      }
+    }, D("div", {
+      style: {
+        width: "42%",
+        flexShrink: 0
+      }
+    }, D(Diag, {
+      p: pA,
+      g: gA
+    })), D("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, LC({
+      data: tmap,
+      series: trailSer,
+      xKey: "HTA",
+      h: 130,
+      ydom: [40, 160],
+      xt: 4,
+      yt: 3
+    })))],
+    ["stability", "Stability", "Self-stable " + vwA.toFixed(1) + "\u2013" + vcADisp + " km/h (" + gA.stb.toFixed(0) + " range)", LC({
+      data: stabMerged,
+      series: stabSer,
+      xKey: "kmh",
+      h: 150,
+      ydom: [-3, 3.5],
+      xt: 4,
+      yt: 3
+    })],
+    ["cornering", "Cornering & RAD", "RAD " + gA.RAD.toFixed(0) + " mm \u00B7 target " + gA.tRAD.toFixed(0) + " (" + (gA.dRAD >= 0 ? "+" : "") + gA.dRAD.toFixed(0) + ")", D("div", {}, LC({
+      data: cmap,
+      series: cornerSer,
+      xKey: "kmh",
+      h: 130,
+      xt: 4,
+      yt: 3
+    }), D("div", {
+      style: {
+        display: "flex",
+        height: 14,
+        borderRadius: 4,
+        overflow: "hidden",
+        marginTop: 8,
+        fontSize: 9,
+        fontFamily: C.mono,
+        fontWeight: 600,
+        lineHeight: "14px",
+        textAlign: "center"
+      }
+    }, D("div", {
+      style: {
+        width: gA.ff * 100 + "%",
+        background: C.blue + "40",
+        color: C.blue
+      }
+    }, (gA.ff * 100).toFixed(0) + "% F"), D("div", {
+      style: {
+        flex: 1,
+        background: C.amb + "30",
+        color: C.amb
+      }
+    }, (gA.rf * 100).toFixed(0) + "% R")))],
+    ["compare", "Compare A / B", "Trail " + gA.trail.toFixed(0) + " vs " + gB.trail.toFixed(0) + " mm \u00B7 RAD " + gA.RAD.toFixed(0) + " vs " + gB.RAD.toFixed(0), D("div", {
+      style: {
+        maxWidth: 440,
+        width: "100%",
+        margin: "0 auto"
+      }
+    }, D(Radar, {
+      data: rdComb,
+      series: [{
+        k: "v",
+        col: C.blue
+      }, {
+        k: "vB",
+        col: C.pur
+      }]
+    }))]
+  ].map(([k, label, sub, chart]) => D("button", {
+    key: k,
+    onClick: () => setVt(k),
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "flex-start",
+      width: "100%",
+      textAlign: "left",
+      padding: "10px 12px",
+      border: "1px solid " + C.bdr,
+      borderRadius: 8,
+      background: C.card,
+      cursor: "pointer",
+      minWidth: 0
+    }
+  }, D("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      gap: 8,
+      marginBottom: 6
+    }
+  }, D("span", {
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: C.txt
+    }
+  }, label), D("span", {
+    style: {
+      fontSize: 10,
+      color: C.blue
+    }
+  }, "Open \u2192")), D("div", {
+    style: {
+      fontSize: 10,
+      color: C.sub,
+      fontFamily: C.mono,
+      marginBottom: 6
+    }
+  }, sub), chart))), vtab === "diagram" && D("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",

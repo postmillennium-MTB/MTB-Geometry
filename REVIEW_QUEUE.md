@@ -77,7 +77,9 @@ Make the first tab a summary showing a smaller version of each graphic from the 
 5. Cost: rendering four charts on the first tab means more work on load. Check on a phone.
 6. Build: `index.html` looks like compiled output (React inlined, `D(...)` calls instead of JSX). Confirm where the editable source lives before changing it.
 
-**Status:** reviewed 2026-10-31
+**Status:** built 2026-10-31 (first tab and default view; four clickable tiles, 2×2 on desktop, stacked on phone; sidebar Quick preview removed). Tile charts are small, so the Geometry tile's trail chart text is hard to read; a possible polish item.
+
+**Review status:** reviewed 2026-10-31
 
 **Findings**
 - A version of this already exists. The left sidebar has a "Quick preview" block (`index.html`, around line 2389) with four buttons, one per view (trail vs head angle, stability, cornering, handling radar). Clicking one jumps to that tab.
