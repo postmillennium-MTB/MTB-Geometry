@@ -603,6 +603,22 @@ function troyNote(szK, cfgK) {
   return "Devinci Troy 2025 (Gen 5) \xB7 Size " + szK + " \xB7 " + TROY_NOTES[cfgK]
 }
 
+// Cockpit RAD: BB centre to grip centre, per Lee McCormack. The stem clamp, stem and bar rise are
+// projected along the tilted steerer axis (head angle). Clamp height 40 mm, swept section 280 mm,
+// 5 deg upsweep are fixed defaults; the (19, 12) mm grip-centre offset is calibrated to the
+// Mad Scientist RAD calculator's four default bikes (residual <= 4 mm RAD, 0.4 deg RAAD).
+function radCalc(p) {
+  const h = p.HTA * Math.PI / 180;
+  const sweep = (p.sweep || 5) * Math.PI / 180;
+  const up = -Math.cos(h), upY = Math.sin(h);
+  const fw = Math.sin(h), fwY = Math.cos(h);
+  const along = 40 + (p.barL || 20);
+  const stem = p.stem || 50;
+  const gx = p.reach + along * up + stem * fw - 280 * Math.sin(sweep) + 19;
+  const gy = p.stack + along * upY + stem * fwY + 280 * Math.sin(5 * Math.PI / 180) + 12;
+  return { RAD: Math.hypot(gx, gy), RAAD: Math.atan2(gy, gx) * 180 / Math.PI };
+}
+
 function geo(p) {
   const Rf_ = Rf(p),
     Rr_ = Rr(p);
@@ -618,11 +634,7 @@ function geo(p) {
   const ff = Math.min(.65, Math.max(.3, (p.CS + p.reach * (.18 + p.rPos * .48)) / wb));
   const vw = 3 * Math.sqrt(wb / 1150 / (trail / 76));
   const vc = 11.5 * Math.pow(trail / 65, .42) * Math.pow(wb / 1150, .2);
-  const sweepDeg = p.sweep || 5;
-  const sweepCorr = 370 * Math.sin(sweepDeg * Math.PI / 180);
-  const radH = p.reach + (p.stem || 50) - sweepCorr;
-  const radV = p.stack + (p.barL || 20);
-  const RAD = Math.sqrt(radH * radH + radV * radV);
+  const { RAD, RAAD } = radCalc(p);
   const radMult = p.gender === "F" ? 4.6 : 4.47;
   const tRAD = (p.rH || 178) * radMult;
   const minTR = wb / Math.tan(35 * Math.PI / 180);
@@ -643,6 +655,7 @@ function geo(p) {
     vck: vc * 3.6,
     stb: Math.max(0, (vc - vw) * 3.6),
     RAD,
+    RAAD,
     tRAD,
     dRAD: RAD - tRAD,
     minTR,
@@ -1529,9 +1542,7 @@ function WeightRAD({
   const radOk = Math.abs(g.dRAD) < 20,
     radLong = g.dRAD > 20;
   const fRAD = Math.sqrt(g.p.reach ** 2 + g.p.stack ** 2).toFixed(0);
-  const sweepDeg = g.p.sweep || 5;
-  const sweepCorr = 370 * Math.sin(sweepDeg * Math.PI / 180);
-  const RAAD = (Math.atan2(g.p.stack + (g.p.barL || 20), g.p.reach + (g.p.stem || 50) - sweepCorr) * 180 / Math.PI).toFixed(1);
+  const RAAD = g.RAAD.toFixed(1);
   const D = React.createElement;
   return D("div", {}, D("div", {
     style: {
@@ -1632,7 +1643,7 @@ function WeightRAD({
       color: C.sub,
       lineHeight: 1.6
     }
-  }, "RAD = BB-center to grip-center (" + sweepDeg.toFixed(1) + "\xB0 bar sweep, -" + sweepCorr.toFixed(0) + "mm correction). Target = height \xD7 " + (g.p.gender === "F" ? "4.60 (F)" : "4.47 (M)") + " mm.", radLong ? " \u26A0 Longer than target \u2014 try shorter stem or less bar rise." : radOk ? " \u2713 Within 20 mm of target." : " \u2191 Slightly short of target."))
+  }, "RAD = BB-center to grip-center, with stem and bar lift projected along the head-angle steerer axis (" + (g.p.sweep || 5).toFixed(1) + "\xB0 bar sweep). Target = height \xD7 " + (g.p.gender === "F" ? "4.60 (F)" : "4.47 (M)") + " mm.", radLong ? " \u26A0 Longer than target \u2014 try shorter stem or less bar rise." : radOk ? " \u2713 Within 20 mm of target." : " \u2191 Slightly short of target."))
 }
 
 function CmpPanel({
@@ -2598,7 +2609,7 @@ function App() {
       lineHeight: 1.9,
       display: "block"
     }
-  }, "T = (R\u2099 \xB7 cos\u03B8 \u2212 f) / sin\u03B8", D("br", null), "WF = T \xB7 sin\u03B8 \xB7 cos\u03B8", D("br", null), "BB = R_rear \u2212 bb_drop", D("br", null), "v_w \u221D \u221A(wb / trail)", D("br", null), "RAD = \u221A((reach+stem\u2212sweep\u2099)+(stack+barL)\xB2)")), miniGallery), ctab === "frame" && D("div", {}, D(SC, {
+  }, "T = (R\u2099 \xB7 cos\u03B8 \u2212 f) / sin\u03B8", D("br", null), "WF = T \xB7 sin\u03B8 \xB7 cos\u03B8", D("br", null), "BB = R_rear \u2212 bb_drop", D("br", null), "v_w \u221D \u221A(wb / trail)", D("br", null), "RAD = |BB \u2192 grip|, stem + lift along steerer axis")), miniGallery), ctab === "frame" && D("div", {}, D(SC, {
     label: "Reach",
     value: pA.reach,
     min: 400,

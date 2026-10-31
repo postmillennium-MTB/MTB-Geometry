@@ -52,7 +52,7 @@ BikeYoke's default setup (872 mm / 58.5°) shows the same direction: roughly 824
 2. Alignment-anchor choice on any overlay.
 3. "Modify a base bike" as deltas (fork travel, angleset, reach-adjust headset, rear center).
 
-**Next step if pursued:** fix RAD first (see BikeYoke item for the extra inputs it needs).
+**RAD fix: done 2026-10-31.** `radCalc()` in `index.html` now projects stem and bar lift along the head-angle steerer axis. Against the four Mad Scientist default bikes it is within 0.1–15 mm of their RAD (it omits stem rise angle and bar roll, which bike 4 uses). Lee McCormack's own article confirms RAD is BB to grips and the target is height (cm) × 4.47 (men) / × 4.60 (women), so the target is unchanged. His article says these targets run shorter than fashionable bikes, so most modern bikes now show as long. A grip-center offset of (19, 12) mm is calibrated to Mad Scientist's outputs, not derived. Possible follow-ups: expose stem rise angle, upsweep, bar roll and clamp height as inputs, and add SHO.
 
 ---
 
